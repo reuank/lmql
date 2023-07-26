@@ -65,6 +65,12 @@ class Batcher:
             if k == "logit_bias": return "-".join([f"{k}={v}" for k,v in sorted(task.get(k, {}).items())])
             return str(task.get(k, "<none>"))
         identifier = "|".join([f"{k}={get(k)}" for k in keys])
+        # check for str or int prompt
+        if isinstance(task["prompt"], str):
+            identifier += "-str"
+        else:
+            identifier += "-int"
+        
         return identifier
 
     def group(self):
@@ -430,7 +436,7 @@ class ResponseStreamSliceIterator:
         
         get_next_item_task = asyncio.create_task(self.slice.data_queue.get())
         done, pending = await asyncio.wait([get_next_item_task, check_done_task], 
-            return_when=asyncio.FIRST_COMPLETED, timeout=5.0)
+            return_when=asyncio.FIRST_COMPLETED, timeout=self.slice.kwargs.get("timeout", 15.0))
     
         self.waiting_tasks.remove(check_done_task)
 
@@ -682,7 +688,8 @@ class AsyncOpenAIAPI:
                         if retries != self.maximum_retries:
                             print("Retrying", retries, "more times")
                             await asyncio.sleep(0.5)
-                        res = await self._create(**kwargs)
+                        task = asyncio.create_task(self._create(**kwargs))
+                        res = await asyncio.wait_for(task, timeout=5.5)
                         break
                     except Exception as e:
                         if type(e) is AssertionError:

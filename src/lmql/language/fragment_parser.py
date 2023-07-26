@@ -17,6 +17,14 @@ class LMQLDecoderConfiguration:
     method: ast.AST
     decoding_args: List[ast.keyword]
 
+    @property
+    def has_dump_compiled_code_flag(self):
+        for kwa in self.decoding_args:
+            if kwa.arg == "dump_compiled_code":
+                if type(kwa.value) is ast.Constant and kwa.value.value == True:
+                    return True
+        return False
+
 @dataclass
 class LMQLDistributionClause:
     variable_name: str
@@ -93,6 +101,8 @@ def transform_token(t):
     return t
 
 def ast_parse(s, unindent=False, oneline=False, loc=None):
+    # for special symbols
+    if len(s) > 0 and all(type(e) is str for e in s): return ast.parse('"' + " ".join(s) + '"')
     try:
         s = remove_comments(s)
         if unindent: s = remove_indentation(s, oneline=oneline)

@@ -6,7 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { registerLmqlLanguage } from "./editor/lmql-monaco-language";
 import { BsSquare, BsFillExclamationSquareFill, BsBoxArrowUpRight, BsArrowRightCircle, BsFillCameraFill, BsCheckSquare, BsSendFill, 
   BsFileArrowDownFill, BsKeyFill, BsTerminal, BsFileCode, BsGithub, BsCardList, BsFullscreen, BsXCircle, BsFillChatLeftTextFill, 
-  BsGear, BsGridFill, BsPlus } from 'react-icons/bs';
+  BsGear, BsGridFill, BsPlus, BsBook } from 'react-icons/bs';
 import { DecoderGraph } from './DecoderGraph';
 import { BUILD_INFO } from './build_info';
 import exploreIcon from "./explore.svg"
@@ -141,6 +141,17 @@ const Title = styled.h1`
     margin-right: 9pt;
     margin-left: 5pt;
     top: 2pt;
+  }
+
+  span.badge {
+    background-color: #383666;
+    font-size: 8pt;
+    padding: 2pt;
+    border-radius: 2pt;
+    color: white;
+    margin-left: 5pt;
+    position: relative;
+    top: -1pt;
   }
 `;
 
@@ -799,7 +810,7 @@ const Row = styled.div`
         width: calc(100% - 15pt - 27.5pt);
       }
     }
-
+  }
 `
 
 const IconButton = styled.button`
@@ -874,6 +885,7 @@ function CheckableToolbarIconButton(props) {
 
 function OutputPanelContent(props) {
   const [output, setOutput] = useState("Client ready.\n");
+  const [alwaysShow, setAlwaysShow] = useState(false);
 
   const onConsoleOut = data => {
     let newOutput = ""
@@ -906,7 +918,9 @@ function OutputPanelContent(props) {
   }, props.style)
 
   return <>
-    <OutputText style={props.style} readOnly={true} value={output}></OutputText>
+    {props.className == "simple" &&
+    <ToggleButton checked={alwaysShow} onClick={() => setAlwaysShow(s => !s)} style={{ float: "right", color: "white" }}>...</ToggleButton>}
+    <OutputText style={props.style} className={props.className + (alwaysShow ? " always" : "")} readOnly={true} value={output}></OutputText>
   </>
 }
 
@@ -918,24 +932,6 @@ const ModelResultText = styled.div`
   white-space: pre-wrap;
   overflow-y: auto;
   font-size: 10pt;
-
-  &.chat-mode {
-    padding-bottom: 50pt;
-  }
-
-  &.chat-mode .system-message {
-    text-align: center;
-    display: block;
-    font-size: 8pt;
-    background-color: transparent !important;
-    color: #adadad;
-    margin-top: 10pt;
-  }
-
-  .system-message {
-    display: none;
-  }
-
 
   &::-webkit-scrollbar {
     width: 0px;
@@ -967,23 +963,41 @@ const ModelResultText = styled.div`
     opacity: 0.95;
   }
   
+  &.chat-mode {
+    padding-bottom: 50pt;
+  }
+
+  &.chat-mode .system-message {
+    display: block;
+    font-size: 8pt;
+  }
+
+  .system-message {
+    display: none;
+    text-align: center;
+  }
+
   div .tag {
     display: block;
     text-align: center;
     font-size: 8pt;
     color: #5c5c5c;
-    padding: 0;
-    margin: 0;
     display: none;
   }
 
   &.chat-mode .variable.eos {
     display: inline;
-    margin: 0pt;
-    position: relative;
-    left: calc(50% - 15pt);
-    top: 10pt;
     opacity: 0.5;
+    text-align: center;
+  }
+
+  div .tag-system:after {
+    content: "System";
+    position: absolute;
+    right: 5pt;
+    top: 0pt;
+    font-size: 8pt;
+    text-transform: uppercase;
   }
 
   div .tag-system {
@@ -1125,6 +1139,7 @@ const TypingIndicator = styled.span`
   width: 8pt;
   height: 12pt;
   position: relative;
+  border-radius: 2pt;
   top: 3.5pt;
   left: 2pt;
   background-color: #d7d5d5;
@@ -1395,7 +1410,7 @@ function ModelResultContent(props) {
       }
 
       if (segment.variable == "__prompt__") {
-        if (segment.content == "\\n" || segment.content.trim() == "") {
+        if (segment.content.trim() == "") {
           continue;
         }
         result.push({
@@ -1554,6 +1569,19 @@ const OutputText = styled.textarea`
   font-family: monospace;
   background-color: #222;
   padding: 0;
+
+  &.simple {
+    flex: 0;
+    border-top: 1px solid #444;
+    padding-top: 10pt;
+    display: none !important;
+  }
+
+  &.simple.always {
+    flex: 0.4;
+    height: 40pt;
+    display: flex !important;
+  }
 `
 const CompiledCodeEditorContainer = styled.div`
   flex: 1;
@@ -1788,7 +1816,7 @@ function InspectorPanelContent(props) {
 
   const valid = ["valid", <ValidText final={resolve(nodeInfo, "final")} valid={resolve(nodeInfo, "valid")} onOpenValidationGraph={props.onOpenValidationGraph}/>]
 
-  const DECODER_KEYS = ["logprob", "seqlogprob", "pool"]
+  const DECODER_KEYS = ["logprob", "seqlogprob", "pool", "prompt"]
   const INTERPRETER_KEYS = ["variable", valid, "mask", "head_index"]
   const PROGRAM_VARIABLES = resolve(nodeInfo, "program_state") ? Object.keys(resolve(nodeInfo, "program_state"))
     .map(key => [key, resolve(nodeInfo, "program_state." + key)]) : []
@@ -2050,7 +2078,6 @@ function SidePanel(props) {
           }
         </>}
       </h2>
-      <OutputPanelContent style={{ display: sidepanel === 'output' ? 'block' : 'none' }} clearTrigger={clearTrigger} />
       <CompiledCodePanelContent style={{ display: sidepanel === 'code' ? 'block' : 'none' }} />
       <ModelResultContent style={{ display: sidepanel === 'model' ? 'flex' : 'none' }}
         selectedNodes={props.selectedNodes}
@@ -2059,6 +2086,11 @@ function SidePanel(props) {
         trackMostLikly={trackMostLikly || !props.simpleMode}
         onTrackLatest={() => setTrackMostLikly(true)}
         processStatus={props.processStatus}
+      />
+      <OutputPanelContent 
+        className={!props.simpleMode && sidepanel != 'output' ? "simple" : ""} 
+        style={{ display: ((!props.simpleMode) || sidepanel === 'output') ? 'block' : 'none' }} 
+        clearTrigger={clearTrigger} 
       />
       {/* <StatisticsPanelContent style={{display: sidepanel === 'stats' ? 'flex' : 'none'}}/> */}
 
@@ -2809,8 +2841,13 @@ class App extends React.Component {
           <Title>
             <img src="/lmql.svg" alt="LMQL Logo"/>  
             LMQL Playground
+            {configuration.NEXT_MODE && <span className="badge">PREVIEW</span>}
           </Title>
-          {configuration.DEMO_MODE && <FancyButton className="in-toolbar" onClick={() => ExploreState.setVisibility(true)}><ExploreIc/> Explore LMQL</FancyButton>}
+          {configuration.DEMO_MODE && <FancyButton className="in-toolbar" onClick={() => ExploreState.setVisibility(true)}>
+            <ExploreIc/> 
+            {!configuration.NEXT_MODE && <>Explore LMQL</>}
+            {configuration.NEXT_MODE && <>Explore New Features</>}
+          </FancyButton>}
           {window.location.hostname.includes("lmql.ai") && <a href={"https://docs.lmql.ai/en/latest/quickstart.html"} target="_blank" rel="noreferrer" className="hidden-on-small">
           Install LMQL Locally </a>}
           <Spacer />
@@ -2837,6 +2874,9 @@ class App extends React.Component {
               {configuration.DEV_MODE && <li onClick={() => this.onCodeScreenshot()}><BsFillCameraFill/> Code Screenshot</li>}
               <li>
                 <a href="https://github.com/eth-sri/lmql" disabled target="_blank" rel="noreferrer"><BsGithub/>LMQL on Github</a>
+              </li>
+              <li>
+                <a href="https://docs.lmql.ai" disabled target="_blank" rel="noreferrer"><BsBook/>Documentation</a>
               </li>
               <span>
                 LMQL {this.state.buildInfo.commit} 

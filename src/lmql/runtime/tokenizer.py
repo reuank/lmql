@@ -13,7 +13,6 @@ from lmql.runtime.caching import cache_file_exists, cachefile
 
 from lmql.runtime.tokenizers.pure_python_tokenizer import PythonBackedTokenizer
 from lmql.runtime.tokenizers.tiktoken_tokenizer import TiktokenTokenizer
-from threading import Thread
 
 global special_token_mappings
 special_token_mappings = {}
@@ -27,25 +26,40 @@ class LMQLTokenizer:
         self._tokenizer_impl = None
         self.loader_thread = None
 
+        self.model_identifier = model_identifier
+
+        self._vocab = None
+        self.vocab_range = None
+
         if loader is not None:
+            from threading import Thread
             def load():
                 t = loader()
                 self._tokenizer_impl = t
                 self.loader_thread = None
+                
+                self._vocab = get_vocab(self.tokenizer_impl)
+                self.vocab_range = max(max(self._vocab.values()) + 1, self.tokenizer_impl.vocab_size)
             self.loader_thread = Thread(target=load)
             self.loader_thread.start()
         else:
             self._tokenizer_impl = tokenizer_impl
-
-        self.model_identifier = model_identifier
-        self.detokenizer_cache = {}
-
-        self._vocab = get_vocab(self.tokenizer_impl)
-        self.vocab_range = max(max(self._vocab.values()) + 1, self.tokenizer_impl.vocab_size)
+            self._vocab = get_vocab(self.tokenizer_impl)
+            self.vocab_range = max(max(self._vocab.values()) + 1, self.tokenizer_impl.vocab_size)
 
         if "FORCE_TIKTOKEN" in os.environ:
             assert type(self.tokenizer_impl) is TiktokenTokenizer
 
+    @property
+    def model_vocab_size(self):
+        """
+        The model vocab size is the size of the vocabulary that a model uses
+        as the dimensionality of its output distribution. This is different from
+        the vocab_size of the tokenizer, which is the size of the vocabulary
+        + some reserved LMQL-specific tokens.
+        """
+        return self.vocab_range
+    
     @property
     def tokenizer_impl(self):
         if self._tokenizer_impl is None:
@@ -58,9 +72,11 @@ class LMQLTokenizer:
 
     @property
     def vocab_size(self):
-        # in LMQL vocab_size is the vocab_range (the highest vocabulary ID + 1)
-        # this allows us to use a dense one hot array where no IDs are skipped
-        return self.vocab_range
+        """
+        The vocab_size is the vocab_range (the highest vocabulary ID + 1)
+        this allows us to use a dense one hot array where no IDs are skipped.
+        """
+        return self.vocab_range + 100 # 100 reserved tokens for LMQL tags
 
     @property
     def bos_token_id(self) -> Optional[int]:
@@ -166,20 +182,29 @@ class LMQLTokenizer:
         else:
             return {"input_ids": input_ids}
     
+    def is_special_id(self, id: str):
+        return id >= self.model_vocab_size
+
+    def truncate_to_model_dim(self, mask):
+        if mask is None:
+            return mask
+        return mask[:self.model_vocab_size]
+
     def special_token_id(self, identifier):
         global special_token_mappings
         global reverse_special_token_mappings
         
         if identifier not in special_token_mappings:
             if len(special_token_mappings) == 0:
-                # offset vocabulary IDs by at least the next decimal power of 10
-                offset = 10 ** (len(str(self.vocab_range)))
+                # offset vocabulary IDs by at least 1 to avoid collisions with the tokenizer's vocabulary
+                offset = self.vocab_range + 1
                 special_token_mappings[identifier] = offset
                 reverse_special_token_mappings[offset] = identifier
             else:
                 next_id = max(special_token_mappings.values()) + 1
                 special_token_mappings[identifier] = next_id
                 reverse_special_token_mappings[next_id] = identifier
+                assert next_id < self.vocab_size, "LMQL special tokens exhausted (only 100 allowed by default)"
         return special_token_mappings[identifier]
     
     def chunk_out_by_special_ids(self, input_ids, tokenize=True):

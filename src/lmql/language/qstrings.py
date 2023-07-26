@@ -137,4 +137,7 @@ class QstringParser:
             elif type(s) is FExpression and s.expr.startswith(":"):
                 self.stmts[i] = TagExpression(s.expr)
 
+        # filter out empty name template variables
+        self.stmts = [s for s in self.stmts if not (type(s) is TemplateVariable and len(s.name) == 0)]
+
         return self.stmts

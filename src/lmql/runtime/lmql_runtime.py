@@ -43,7 +43,7 @@ class EmptyVariableScope:
             if errors == "ignore":
                 return None
             else:
-                raise TypeError("Failed to resolve value of variable '" + name + "' in LMQL query")
+                raise TypeError("Failed to resolve value of variable '" + name + "' in @lmql.query function.")
 
 @dataclass
 class FunctionContext:
@@ -58,6 +58,8 @@ class LMQLQueryFunction:
     postprocessors: List[Any]
     scope: Any
 
+    name: str = None
+
     output_writer: Optional[Any] = None
     args: Optional[List[str]] = None
     model: Optional[Any] = None
@@ -68,6 +70,7 @@ class LMQLQueryFunction:
 
     lmql_code: str = None
 
+    __lmql_query_function__ = True
     is_async: bool = True
     
     def __init__(self, fct, output_variables, postprocessors, scope, *args, **kwargs):
@@ -82,6 +85,9 @@ class LMQLQueryFunction:
         # only set if the query is defined inline of a Python file
         self.function_context = None
 
+    def __hash__(self):
+        return hash(self.fct)
+
     @property
     def input_keys(self) -> List[str]:
         return self.args
@@ -95,6 +101,23 @@ class LMQLQueryFunction:
 
     def force_model(self, model):
         self.model = model
+
+    def try_bind_positional_to_kwargs(self, signature, *args, **query_kwargs):
+        """
+        Best-effort attempt to bind positional arguments to keyword arguments in order of self.args. 
+
+        Only enabled for lmql.F for now, may have unexpected effects depending on the order query
+        arguments as determined by the compiler.
+        """
+        # only bind if kwargs are empty and no signature is provided (lmql.F or lmql.run)
+        if len(signature.parameters) != 0 or len(self.args) != len(args):
+            return
+        kwargs = {**{k:v for k,v in zip(self.args, args)}, **query_kwargs}
+
+        return inspect.BoundArguments(
+            signature=inspect.Signature(parameters=[inspect.Parameter(name=k, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD) for k in self.args]),
+            arguments=kwargs
+        )
 
     def make_kwargs(self, *args, **kwargs):
         """
@@ -120,14 +143,24 @@ class LMQLQueryFunction:
 
         # bind args and kwargs to signature
         try:
-            signature = signature.bind(*args, **query_kwargs)
+            signature: inspect.BoundArguments = signature.bind(*args, **query_kwargs)
         except TypeError as e:
-            if len(e.args) == 1 and e.args[0].startswith("missing "):
-                e.args = (f"Call to @lmql.query function is " + e.args[0] + "." + f" Expecting {signature}, but got positional args {args} and {kwargs}.",)
-            elif len(e.args) == 1:
-                e.args = (e.args[0] + "." + f" Expecting {signature}, but got positional args {args} and {kwargs}.",)
-            raise e
+            if "too many positional arguments" in str(e):
+                # this is different from Python behavior, but we allow it for lmql.F and lmql.run
+                pos_as_kw = self.try_bind_positional_to_kwargs(signature, *args, **kwargs)
+                if pos_as_kw is not None:
+                    signature = pos_as_kw
+                else:
+                    raise e
+            else:    
+                if len(e.args) == 1 and e.args[0].startswith("missing "):
+                    e.args = (f"Call to @lmql.query function is " + e.args[0] + "." + f" Expecting {signature}, but got positional args {args} and {kwargs}.",)
+                elif len(e.args) == 1:
+                    e.args = (e.args[0] + "." + f" Expecting {signature}, but got positional args {args} and {kwargs}.",)
+                raise e
         
+        signature.apply_defaults()
+
         # special case, if signature is empty (no input variables provided)
         if len(signature.arguments) == 0:
             # bind kwargs dynamically in compiled_query_args
@@ -147,7 +180,6 @@ class LMQLQueryFunction:
 
         failed_to_resolve = []
 
-
         # resolve remaining unset args from scope
         for v in captured_variables:
             if not v in compiled_query_args:
@@ -156,6 +188,7 @@ class LMQLQueryFunction:
                 except TypeError:
                     failed_to_resolve.append(v)
 
+        # disable this check for now, as dynamic variable resolution cannot always be checked at compile time (e.g. import * from module)
         if len(failed_to_resolve) == 1:
             raise TypeError("Failed to resolve variable '" + failed_to_resolve[0] + "' in LMQL query.")
         elif len(failed_to_resolve) > 0:
@@ -184,8 +217,15 @@ class LMQLQueryFunction:
         if "self" in query_kwargs:
             query_kwargs["__self__"] = query_kwargs.pop("self")
 
-        # execute main prompt
-        results = await interpreter.run(self.fct, **query_kwargs)
+        # keep track of the main interpreter (only produces debug output for this one)
+        try:
+            if PromptInterpreter.main is None:
+                PromptInterpreter.main = interpreter
+            # execute main prompt
+            results = await interpreter.run(self.fct, **query_kwargs)
+        finally:
+            if PromptInterpreter.main == interpreter:
+                PromptInterpreter.main = None
 
         # applies distribution postprocessor if required
         results = await (ConditionalDistributionPostprocessor(interpreter).process(results))
@@ -246,3 +286,15 @@ def compiled_query(output_variables=None, group_by=None):
                                  scope=LMQLInputVariableScope(fct, calling_frame))
     return func_transformer
     
+
+async def call(fct, *args, **kwargs):
+    if type(fct) is LMQLQueryFunction or (hasattr(fct, "__lmql_query_function__") and fct.__lmql_query_function__.is_async):
+        result = await fct(*args, **kwargs)
+        if len(result) == 1: 
+            return result[0]
+        else: 
+            return result
+    if inspect.iscoroutinefunction(fct):
+        return await fct(*args, **kwargs)
+    else:
+        return fct(*args, **kwargs)

@@ -25,6 +25,7 @@ from lmql.runtime.lmql_runtime import (FunctionContext, LMQLInputVariableScope,
 from lmql.runtime.model_registry import LMQLModelRegistry
 from lmql.runtime.output_writer import headless, printing, silent, stream
 from lmql.runtime.interpreter import LMQLResult
+
 from lmql.models.model import model
 from lmql.runtime.loop import main
 
@@ -197,6 +198,7 @@ def query(__fct__=None, input_variables=None, is_async=True, calling_frame=None,
     # copy some attributes of model.query to the wrapper function
     for attr in ["aschain", "lmql_code", "is_async", "output_variables"]:
         setattr(lmql_query_wrapper, attr, getattr(module.query, attr))
+    setattr(lmql_query_wrapper, "__lmql_query_function__", module.query)
 
     return lmql_query_wrapper
 
@@ -206,6 +208,16 @@ async def static_prompt(query_fct, *args, **kwargs):
     """
     res = await query_fct(*args, **kwargs, return_prompt_string=True)
     return res[0]
+
+def main(query_fct, *args, **kwargs):
+    """
+    Runs the provided query function in the main thread
+    and returns the result.
+
+    This call is blocking.
+    """
+    import asyncio
+    return asyncio.run(query_fct(*args, **kwargs))
 
 def serve(*args, **kwargs):
     assert not "LMQL_BROWSER" in os.environ, "lmql.serve is not available in the browser distribution of LMQL."

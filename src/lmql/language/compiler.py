@@ -1,23 +1,29 @@
-from _ast import And, AsyncFunctionDef, BinOp, ClassDef, Compare, FunctionDef, Import, ImportFrom, Return
 import ast
-import sys
-from typing import Any
-import astunparse
-import os
 import importlib
+import os
 import re
-
+import sys
+from _ast import (And, AsyncFunctionDef, Await, BinOp, Call, ClassDef, Compare, ExceptHandler,
+                  FunctionDef, If, Import, ImportFrom, Return)
 from io import StringIO
-from lmql.ops.ops import lmql_operation_registry
+from typing import Any
 
-from lmql.language.qstrings import qstring_to_stmts, TemplateVariable, FExpression, DistributionVariable, TagExpression, stmts_to_qstring
-from lmql.language.validator import LMQLValidator, LMQLValidationError
-from lmql.language.fragment_parser import LMQLDecoderConfiguration, LMQLQuery, LanguageFragmentParser, FragmentParserError
-from lmql.runtime.model_registry import model_name_aliases
+import astunparse
+
 import lmql.runtime.lmql_runtime as lmql_runtime
+from lmql.language.fragment_parser import (FragmentParserError,
+                                           LanguageFragmentParser,
+                                           LMQLDecoderConfiguration, LMQLQuery)
+from lmql.language.qstrings import (DistributionVariable, FExpression,
+                                    TagExpression, TemplateVariable,
+                                    qstring_to_stmts, stmts_to_qstring)
+from lmql.language.validator import LMQLValidationError, LMQLValidator
+from lmql.ops.ops import lmql_operation_registry
 from lmql.runtime.dclib import get_all_decoders
+from lmql.runtime.model_registry import model_name_aliases
 
 OPS_NAMESPACE = "lmql.ops"
+LIB_NAMESPACE = "lmql.lib"
 
 class FreeVarCollector(ast.NodeVisitor):
     def __init__(self, free_vars, exclude_criteria=None):
@@ -42,29 +48,41 @@ class FreeVarCollector(ast.NodeVisitor):
             self.free_vars.add(node.id)
 
 class DefinedVarsCollector(ast.NodeVisitor):
-    def __init__(self, defined_vars):
+    def __init__(self, defined_vars, defined_constraints):
         self.defined_vars = defined_vars
+        self.defined_constraints = defined_constraints
 
     def visit_Name(self, node):
         if type(node.ctx) is ast.Store:
             self.defined_vars.add(node.id)
+        super().generic_visit(node)
 
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
         self.defined_vars.add(node.name)
+        super().generic_visit(node)
 
     def visit_ClassDef(self, node: ClassDef) -> Any:
         self.defined_vars.add(node.name)
+        visit_potential_constraint_def(node, self)
+        super().generic_visit(node)
 
     def visit_Import(self, node: Import) -> Any:
         for alias in node.names:
             self.defined_vars.add(alias.asname or alias.name)
+        super().generic_visit(node)
 
     def visit_ImportFrom(self, node: ImportFrom) -> Any:
         for alias in node.names:
             self.defined_vars.add(alias.asname or alias.name)
+        super().generic_visit(node)
 
     def visit_AsyncFunctionDef(self, node: AsyncFunctionDef) -> Any:
         self.defined_vars.add(node.name)
+        super().generic_visit(node)
+
+    # visit LMQLOp decorator to collect defined variables
+    def visit_Call(self, node: ast.Call) -> Any:
+        return super().generic_visit(node)
 
 class PromptScope(ast.NodeVisitor):
     def __init__(self):
@@ -74,14 +92,17 @@ class PromptScope(ast.NodeVisitor):
         self.free_vars = set()
         self.written_vars = set()
 
+        self.defined_constraints = set()
+
     def scope_prologue(self, query: LMQLQuery):
         if query.prologue is None: return
         
-        DefinedVarsCollector(self.prologue_vars).visit(ast.parse(query.prologue))
+        DefinedVarsCollector(self.prologue_vars, self.defined_constraints).visit(ast.parse(query.prologue))
 
     def scope(self, query: LMQLQuery):
         self.distribution_vars = set([query.distribution.variable_name]) if query.distribution is not None else set()    
         self.defined_vars = set()
+        self.template_vars = set()
         self.prologue_vars = set()
 
         # collect set of global query template variables
@@ -92,7 +113,8 @@ class PromptScope(ast.NodeVisitor):
         self.scope_prologue(query)
 
         # collect defined vars in prompt
-        for p in query.prompt: self.visit(p)
+        for p in query.prompt: 
+            self.visit(p)
 
         # also collect variable reads from where clause
         if query.where is not None:
@@ -105,7 +127,7 @@ class PromptScope(ast.NodeVisitor):
             FreeVarCollector(self.free_vars, exclude_criteria=[self.exclude_identifier]).visit(query.distribution.values)
 
         # remove all defined and prologue vars from free vars
-        self.free_vars = self.free_vars - self.defined_vars - self.prologue_vars
+        self.free_vars = self.free_vars - self.defined_vars - self.prologue_vars - self.defined_constraints
 
         query.scope = self
 
@@ -118,6 +140,8 @@ class PromptScope(ast.NodeVisitor):
     def visit_BoolOp(self, node: ast.BoolOp) -> Any:
         if is_query_string_with_constraints(node):
             self.scope_Constant(node.values[0])
+        else:
+            super().generic_visit(node)
 
     def scope_Constant(self, node):
         if type(node.value) is not str: return super().visit_Constant(node)
@@ -130,6 +154,7 @@ class PromptScope(ast.NodeVisitor):
         for v in declared_template_vars: 
             self.defined_vars.add(v)
             self.written_vars.add(v)
+            self.template_vars.add(v)
             if v in self.free_vars: self.free_vars.remove(v)
 
         used_fstring_expr = [s.expr for s in stmts if type(s) is FExpression]
@@ -191,6 +216,10 @@ class PromptScope(ast.NodeVisitor):
         
         return True
     
+    def visit_ExceptHandler(self, node: ExceptHandler) -> Any:
+        self.written_vars.add(node.name)
+        self.generic_visit(node)
+    
     def visit_FunctionDef(self, node: FunctionDef) -> Any:
         self.defined_vars.add(node.name)
     
@@ -199,10 +228,24 @@ class PromptScope(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ClassDef) -> Any:
         self.defined_vars.add(node.name)
+        visit_potential_constraint_def(node, self)
 
     def visit_ImportFrom(self, node: ImportFrom) -> Any:
         for alias in node.names:
             self.defined_vars.add(alias.asname or alias.name)
+
+def visit_potential_constraint_def(node: ClassDef, scope: PromptScope):
+    for d in node.decorator_list:
+        # detect LMQLOp calls
+        if type(d) is ast.Call:
+            if type(d.func) is ast.Name:
+                if d.func.id == "LMQLOp" and len(d.args) == 1:
+                    if type(d.args[0]) is ast.Constant:
+                        scope.defined_constraints.add(d.args[0].value)
+                    elif type(d.args[0]) is ast.List:
+                        for e in d.args[0].elts:
+                            if type(e) is ast.Constant:
+                                scope.defined_constraints.add(e.value)
 
 def is_query_string_with_constraints(node: ast.BoolOp):
     if len(node.values) < 1:
@@ -210,7 +253,39 @@ def is_query_string_with_constraints(node: ast.BoolOp):
     left_most_operand = node.values[0]
     return type(left_most_operand) is ast.Constant and type(left_most_operand.value) is str and isinstance(node.op, ast.And)
 
-class QueryStringTransformation(ast.NodeTransformer):
+class FunctionCallTransformation(ast.NodeTransformer):
+    """
+    Translates function calls into lmql.call calls (to enable automatic await and unpacking 
+    when calling subqueries).
+    """
+    def visit_Await(self, node: Await) -> Any:
+        super().generic_visit(node)
+
+        if type(node.value) is ast.Await:
+            return node.value
+        return node.value
+
+    def is_excluded_from_call_transformation(self, node):
+        if not type(node) is ast.Name: return False
+        if ast.unparse(node).startswith("lmql.runtime_support.call"): return True
+        return node.id in ["print", "eval", "locals", "globals"]
+
+    def visit_Call(self, node: Call) -> Any:
+        f = self.visit(node.func)
+        args = [self.visit(a) for a in node.args]
+        keywords = [self.visit(k) for k in node.keywords]
+
+        if self.is_excluded_from_call_transformation(node.func):
+            node.func = f
+            node.args = args
+            node.keywords = keywords
+            return node
+
+        wrapped = Call(ast.parse("lmql.runtime_support.call"), [f, *args], keywords)
+        wrapped = ast.Await(wrapped)
+
+        return wrapped
+class PromptClauseTransformation(FunctionCallTransformation):
     """
     Transformes string expressions on statement level to model queries.
     """
@@ -224,10 +299,10 @@ class QueryStringTransformation(ast.NodeTransformer):
     def visit_Expr(self, expr):
         if type(expr.value) is ast.Constant:
             expr.value = self.transform_Constant(expr.value)
+            return expr
         else:
-            self.generic_visit(expr)
-        return expr
-    
+            return self.generic_visit(expr)
+
     # translate id access to context
     def visit_Name(self, node: ast.Name):
         name = str(node.id)
@@ -247,14 +322,16 @@ class QueryStringTransformation(ast.NodeTransformer):
             elif len(node.values[1:]) == 0:
                 constraints_expression = None
             return self.transform_Constant(left_most_operand, constraints = constraints_expression)
-        return node
+        return self.generic_visit(node)
 
     def transform_Constant(self, constant, constraints=None):
         if type(constant.value) is not str: return constant
         
         qstring = constant.value
-        qstring = qstring.encode("unicode_escape").decode("utf-8").encode('unicode_escape').decode('utf-8')
-        
+        if len(qstring) == 0: return constant
+        if qstring.strip().startswith("lmql"): return constant
+
+        qstring = qstring.encode("unicode_escape").decode("utf-8").encode('unicode_escape').decode('utf-8')        
         compiled_qstring = ""
 
         declared_template_vars = set()
@@ -273,6 +350,10 @@ class QueryStringTransformation(ast.NodeTransformer):
 
         if len(compiled_qstring) == 0:
             return constant
+        
+        qstring_as_fstring: ast.JoinedStr = ast.parse(f'f"""{compiled_qstring}"""').body[0].value
+        function_call_transformer = FunctionCallTransformation()
+        qstring_as_fstring.values = [function_call_transformer.visit(v) for v in qstring_as_fstring.values]
 
         if constraints is not None:
             constraint_transformation = InlineConstraintsTransformation(constraints, scope=self.query.scope)
@@ -367,10 +448,10 @@ class LMQLConstraintTransformation:
             raise LMQLValidationError("Distribution variable {} cannot be used in where clause.".format(node.id))
 
         # check for template variables
-        if node.id in self.scope.defined_vars and not keep_variables:
+        if node.id in self.scope.template_vars and not keep_variables:
             return f"lmql.runtime_support.Var('{node.id}')"
         else:
-            return f"lmql.runtime_support.Var('{node.id}', python_variable=True)"
+            return f"lmql.runtime_support.Var('{node.id}', python_variable=True, python_value={node.id})"
 
         return bn or node.id
 
@@ -383,11 +464,6 @@ class LMQLConstraintTransformation:
                 
                 Op = f"{OPS_NAMESPACE}.AndOp" if type(expr.op) is ast.And else f"{OPS_NAMESPACE}.OrOp"
                 return snf.add(f"{Op}([\n  {tops_list}\n])")
-        # elif type(expr) is ast.Call:
-        #     tfunc = self.transform_node(expr.func, snf)
-        #     targs = [self.transform_node(a, snf) for a in expr.args]
-        #     targs_list = ", ".join(targs)
-        #     return f"{tfunc}({targs_list})"
         elif type(expr) is ast.Name:
             return self.transform_name(expr)
         elif type(expr) is ast.UnaryOp:
@@ -401,7 +477,7 @@ class LMQLConstraintTransformation:
                 if type(op) is OpT:
                     operand = self.transform_node(expr.operand, snf).strip()
                     return snf.add(f"{impl}([{operand}])")
-            
+
             assert False, "unary operator {} not supported.".format(type(expr.op))
         elif type(expr) is ast.Compare:
             op = expr.ops[0]
@@ -420,10 +496,11 @@ class LMQLConstraintTransformation:
                     ops_list = ", ".join(ops).strip()
                     return snf.add(f"{impl}([{ops_list}])")
             
-            # if is_type_constraint(expr):
-            #     type_name = expr.comparators[0].id
-            #     var_name = expr.left.args[0].id
-            #     return snf.add(f"{OPS_NAMESPACE}.TypeConstraint([{type_name}, {OPS_NAMESPACE}.Var('{var_name}')])")
+            if is_type_constraint(expr):
+                type_name = expr.comparators[0].id
+                var_name = expr.left.args[0].id
+                return snf.add(f"{OPS_NAMESPACE}.CallOp([{LIB_NAMESPACE}.types.is_type, [{OPS_NAMESPACE}.Var('{var_name}'), {type_name}]], locals(), globals())")
+                # return snf.add(f"{LIB_NAMESPACE}.is_type([{type_name}, {OPS_NAMESPACE}.Var('{var_name}')])")
             
             assert False, "operator {} is not supported.".format(astunparse.unparse(expr))
         elif type(expr) is ast.Constant:
@@ -431,13 +508,19 @@ class LMQLConstraintTransformation:
         elif type(expr) is ast.ListComp:
             return self.default_transform_node(expr, snf).strip()
         elif type(expr) is ast.Call:
-            bn = get_builtin_name(expr.func)
-            if bn is not None:
+            constraint_ref = get_builtin_name(expr.func) or get_inner_constraint_ref(expr.func, self.scope)
+            if constraint_ref is not None:
                 args = [self.transform_node(a, snf) for a in expr.args]
                 args_list = ", ".join(args)
-                return f"{bn}([{args_list}])"
+                return f"{constraint_ref}([{args_list}])"
             if is_allowed_builtin_python_call(expr.func):
                 return self.default_transform_node(expr, snf).strip()
+            
+            assert type(expr.func) is ast.Name, "In LMQL constraint expressions, only function calls to direct function references are allowed: {}".format(astunparse.unparse(expr))
+            tfunc = ast.unparse(expr.func)
+            targs = [self.transform_node(a, snf) for a in expr.args]
+            targs_list = ", ".join(targs)
+            return f"{OPS_NAMESPACE}.CallOp([{tfunc}, [{targs_list}]], locals(), globals())"
         elif type(expr) is ast.List:
             return self.default_transform_node(expr, snf).strip()
 
@@ -449,7 +532,7 @@ class LMQLConstraintTransformation:
         names = set()
         def collect_name(node):
             name = node.id
-            if name in self.scope.defined_vars:
+            if name in self.scope.template_vars:
                 names.add(name)
         NameVisitor(collect_name).visit(node)
         names = sorted(list(names))
@@ -510,6 +593,19 @@ def is_allowed_builtin_python_call(node):
     allowed_builtin_functions = set(["set", "all"])
     return node.id in allowed_builtin_functions
 
+def get_inner_constraint_ref(node, scope: PromptScope):
+    if type(node) is str:
+        n = node
+    else:
+        if type(node) is not ast.Name:
+            return None
+        n = node.id
+    
+    if n in scope.defined_constraints:
+        return OPS_NAMESPACE + ".lmql_operation_registry['" + n + "']"
+    
+    return None
+
 def get_builtin_name(node, plain_python=False):
     if type(node) is str:
         n = node
@@ -519,8 +615,12 @@ def get_builtin_name(node, plain_python=False):
         n = node.id
     
     if n in lmql_operation_registry.keys():
-        return OPS_NAMESPACE + "." + lmql_operation_registry[n]
-    
+        name = lmql_operation_registry[n]
+        if type(name) is type:
+            return OPS_NAMESPACE + ".lmql_operation_registry['" + n + "']"
+        else:
+            return OPS_NAMESPACE + "." + name
+
     return None
 
 def is_type_constraint(expr: ast.Expr):
@@ -566,7 +666,7 @@ class DecodeClauseTransformation:
 class CompilerTransformations:
     def __init__(self):
         self.transformations = [
-            QueryStringTransformation,
+            PromptClauseTransformation,
             WhereClauseTransformation,
             DecodeClauseTransformation,
             ReturnStatementTransformer
@@ -589,7 +689,7 @@ class PythonFunctionWriter:
         self.file = open(self.filename, "w")
 
         self.indent = "  "
-        self.write("import lmql\n")
+        self.write("import lmql\nimport lmql.lib\n")
         self.write(self.prologue)
         
         if decorators is not None:
@@ -684,7 +784,10 @@ class LMQLCompiler:
             lmql_code = preprocess_text(contents)
             buf = StringIO(lmql_code)
             parser = LanguageFragmentParser()
-            q = parser.parse(buf.readline)
+            try:
+                q = parser.parse(buf.readline)
+            except IndentationError as e:
+                raise RuntimeError("parsing error: {}.\nFailed when parsing:\n {}".format(e, lmql_code))
 
             # output file path
             basename = os.path.basename(filepath).split(".lmql")[0]
@@ -729,6 +832,9 @@ class LMQLCompiler:
                     writer.add(yield_call("set_distribution", "\"" + q.distribution.variable_name + "\"", astunparse.unparse(q.distribution.values).strip()))
                 
                 writer.add(f"yield ('result', (" + yield_call("get_return_value", ()) + "))")
+
+            if q.decode.has_dump_compiled_code_flag:
+                print(writer.in_memory_contents)
 
             return LMQLModule(output_file, lmql_code=lmql_code, output_variables=[v for v in scope.defined_vars])
         except FragmentParserError as e:

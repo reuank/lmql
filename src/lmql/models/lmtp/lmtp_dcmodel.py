@@ -303,6 +303,8 @@ class LMTPModel(DcModel):
     async def _score_next_tokens(self, s, next_tokens, noscore=False):
         if noscore:
             return np.zeros(len(next_tokens), dtype=np.float32)
+    
+        await self.ensure_connected()
         
         scores = []
         i = 0
@@ -330,11 +332,11 @@ class LMTPModel(DcModel):
         def make_detseq(s, token_score, completion):
             # compose deterministic flags
             if type(deterministic) is bool:
-                deterministic_flags = np.concatenate([s.deterministic, np.array([deterministic])])
+                deterministic_flags = np.concatenate([s.deterministic, np.array([deterministic])], dtype=np.bool_)
                 next_deterministic = np.array([deterministic] * len(completion[1:]))
             else:
                 assert type(deterministic) is list and len(deterministic) == len(completion), "If deterministic is a list, it must have the same length as the number of tokens to be scored, but is {} and {}".format(deterministic, completion)
-                deterministic_flags = np.concatenate([s.deterministic, np.array(deterministic[:1])])
+                deterministic_flags = np.concatenate([s.deterministic, np.array(deterministic[:1])], dtype=np.bool_)
                 next_deterministic = np.array(deterministic[1:])
 
             return dc.detseq(ids=np.concatenate([s.input_ids, completion[:1]], axis=0), 
@@ -447,7 +449,8 @@ class lmtp_model:
                 else:
                     lmtp_server_kwargs = None
 
-                return LMTPModel(self, self.get_tokenizer(), inprocess=this.inprocess, endpoint=this.endpoint, lmtp_server_kwargs=lmtp_server_kwargs, inprocess_client_constructor=inprocess_client_constructor, **self.decoder_args)
+                return LMTPModel(self, self.get_tokenizer(), inprocess=this.inprocess, endpoint=this.endpoint, lmtp_server_kwargs=lmtp_server_kwargs, 
+                                 inprocess_client_constructor=inprocess_client_constructor, **self.decoder_args)
 
             async def tokenize(self, text):
                 return self.get_tokenizer().tokenize(text, asbytes=True)
