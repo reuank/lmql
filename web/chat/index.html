@@ -8,22 +8,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
   
   <!-- Primary Meta Tags -->
-  <title>LMQL: Programming Large Language Models</title>
-  <meta name="title" content="LMQL: Programming Large Language Models">
-  <meta name="description" content="LMQL is a query language for large language models (LLMs). It facilitates LLM interaction by combining the benefits of natural language prompting with the expressiveness of Python.">
+  <title>LMQL Chat: Scripted Chatbot Development </title>
+  <meta name="title" content="LMQL Chat: Scripted Chatbot Development ">
+  <meta name="description" content="Build custom chatbots in just a couple of lines of LMQL.">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://lmql.ai/">
-  <meta property="og:title" content="LMQL: Programming Large Language Models">
-  <meta property="og:description" content="LMQL is a query language for large language models (LLMs). It facilitates LLM interaction by combining the benefits of natural language prompting with the expressiveness of Python.">
+  <meta property="og:title" content="LMQL Chat: Scripted Chatbot Development ">
+  <meta property="og:description" content="Build custom chatbots in just a couple of lines of LMQL.">
   <meta property="og:image" content="https://lmql.ai/static/images/lmql-social.png">
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="https://lmql.ai/">
-  <meta property="twitter:title" content="LMQL: Programming Large Language Models">
-  <meta property="twitter:description" content="LMQL is a query language for large language models (LLMs). It facilitates LLM interaction by combining the benefits of natural language prompting with the expressiveness of Python.">
+  <meta property="twitter:title" content="LMQL Chat: Scripted Chatbot Development ">
+  <meta property="twitter:description" content="Build custom chatbots in just a couple of lines of LMQL.">
   <meta property="twitter:image" content="https://lmql.ai/static/images/lmql-social.png"">
   
   
@@ -35,13 +35,496 @@
   <link rel="icon" href="/static/images/favicon.svg">
   <link rel="stylesheet" href="/static/css/val.gen.css">
   <link rel="stylesheet" href="/static/css/lmql.css">
-  <link rel="stylesheet" href="./chat.css">
+  <link rel="stylesheet" href="../actions/lmql-extra.css">
+  <link rel="stylesheet" href="/static/css/promptdown.css">
   <link rel="stylesheet" href="/static/css/highlight.min.css">
   <script src="https://kit.fontawesome.com/06bb68d804.js" crossorigin="anonymous"></script>
 
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
   <script src="/static/js/highlight.min.js"></script>
   <script src="/static/js/lmql.js"></script>
+  <script src="/static/js/promptdown.js"></script>
+
+  <style>
+  .lmql-chat {
+    padding: 0;
+    margin: 0;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    overflow: hidden;
+}
+
+.lmql-chat .content {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    height: 100%;
+
+}
+
+/* on small devices, scale content to full screen */
+@media (max-width: 500pt) {
+    .lmql-chat .content {
+        top: 0;
+        left: 0;
+        bottom: 0;
+        transform: none;
+        width: 100%;
+    }
+    .lmql-chat .content .front {
+        border-radius: 0;
+    }
+    .lmql-chat .content .back {
+        border-radius: 0;
+    }
+}
+
+.lmql-chat .chat {
+    flex: 1;
+    overflow-y: hidden;
+    background-color: white;
+}
+
+.lmql-chat .chat pre.promptdown {
+  border: none;
+  overflow: hidden;
+}
+
+.lmql-chat .chat .api-key-entry {
+    padding: 10pt;
+}
+
+.lmql-chat .chat .api-key-entry h1 {
+    margin: 0;
+    margin-bottom: 5pt;
+    font-size: 12pt;
+}
+
+.lmql-chat .chat .api-key-entry input {
+    background-color: rgb(225, 222, 222);
+    display: block;
+    width: calc(100% - 20pt);
+    border: none;
+    padding: 5pt;
+    border-radius: 4pt;
+}
+
+.lmql-chat .code .toolbar {
+    padding-left: 5pt;
+}
+
+.lmql-chat .toolbar {
+    background-color: #eeeeee;
+    border-bottom: 0.5pt solid grey;
+    padding: 5pt;
+    position: relative;
+    padding-left: 32pt;
+}
+.lmql-chat .toolbar>.icon {
+    font-size: 20pt;
+}
+
+.lmql-chat .toolbar>img, .toolbar>.icon {
+    position: absolute;
+    top: 8pt;
+    left: 5pt;
+    bottom: 5pt;
+    width: auto;
+    height: 20pt;
+    display: block;
+}
+.lmql-chat .toolbar h1 {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    margin: 0;
+    padding: 0;
+    font-size: 12pt;
+    color: black;
+    font-size: 14pt;
+    font-weight: 500;
+}
+.lmql-chat .toolbar h2 {
+    margin: 0;
+    padding: 0;
+    font-size: 10pt;
+    font-weight: 500;
+    color: grey;
+}
+
+.lmql-chat .toolbar button {
+    position: absolute;
+    right: 5pt;
+    top: 5pt;
+}
+.lmql-chat .input {
+    background-color: #eeeeee;
+    border-top: 0.5pt solid grey;
+    display: flex;
+    height: auto;
+}
+.lmql-chat .input textarea {
+    flex: 1;
+    margin: 10pt;
+    min-height: 30pt;
+    border-radius: 4pt;
+    border: 0.5pt solid rgb(208, 208, 208);
+    background-color: rgb(255, 255, 255);
+    font-size: 18pt;
+    /* resize */
+    resize: none;
+    padding: 5pt;
+}
+.lmql-chat .input button {
+    margin: 10pt;
+}
+.lmql-chat .message {
+    margin: 5pt;
+    white-space: pre-wrap;
+}
+.lmql-chat .message.assistant {
+    margin-right: 10%;
+    text-align: left;
+    
+    animation: fademovein 0.125s ease-out;
+}
+@keyframes fademovein {
+    .0% {
+        opacity: 0;
+        transform: translateX(-10%);
+    }
+    .100% {
+        opacity: 1;
+        transform: translateX(0%);
+    }
+}
+
+.message.assistant .message-content{
+    background-color: rgb(74, 74, 229);
+    border-radius: 8pt;
+    padding: 8pt;
+    display: inline-block;
+    text-align: left;
+    color: white;
+}
+.lmql-chat .message.user {
+    color: rgb(43, 43, 43);
+    margin-left: 15%;
+    text-align: right;
+}
+.lmql-chat .message.message.user .message-content {
+    background-color: rgb(206, 205, 205);
+    border-radius: 8pt;
+    padding: 8pt;
+    display: inline-block;
+    text-align: left;
+}
+.lmql-chat .front .system {
+    text-align: center;
+    color: grey;
+    font-weight: 300;
+    font-size: 10pt;
+}
+.lmql-chat .chat .thinking {
+    background-color: #eeeeee;
+    display: inline-block;
+    border-radius: 8pt;
+    padding: 5pt;
+    margin-left: 5pt;
+}
+.lmql-chat .chat .thinking .bubble {
+    width: 7pt;
+    height: 7pt;
+    border-radius: 50%;
+    background-color: rgb(189, 189, 189);
+    display: inline-block;
+    margin: 2pt;
+    animation: jump 1.0s ease-in-out infinite alternate;
+    position: relative;
+    bottom: 1.5pt;
+}
+@keyframes jump {
+    0% {
+        transform: translateY(0%);
+    }
+    20% {
+        transform: translateY(50%);
+    }
+    100% {
+        transform: translateY(50%);
+    }
+}
+/* delay bubbles  */
+.lmql-chat .chat .thinking .bubble:nth-child(2) {
+    animation-delay: 0.2s;
+}
+.lmql-chat .chat .thinking .bubble:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.lmql-chat button {
+    border: none;
+    background: transparent;
+    height: 20pt;
+    width: 20pt;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15pt;
+}
+
+.lmql-chat .chat button {
+    width: auto;
+    height: auto;
+    /* nice blue */
+    background-color: #4a4ae5;
+    color: white;
+    padding: 10pt;
+    border-radius: 2pt;
+    margin-top: 5pt;
+}
+
+.lmql-chat button:hover {
+    cursor: pointer;
+    background-color: #d1d1d1;
+    border-radius: 4pt;
+}
+
+.lmql-chat button:active {
+    background-color: #b1b1b1;
+}
+
+.lmql-chat button img {
+    height: 10pt;
+    display: inline-block;
+    margin: 5pt;
+}
+
+.lmql-chat .input button {
+    height: auto;
+    width: auto;
+    display: block;
+    padding: 5pt;
+    margin-left: 0;
+}
+
+.lmql-chat .input button img {
+    height: 15pt;
+}
+
+.lmql-chat .content.code-view .code {
+    transform: rotateY(360deg);
+}
+
+.lmql-chat .back {
+    border: 0.5pt solid grey;
+    border-radius: 4pt;
+    margin: 5pt;
+    font-family: monospace;
+    font-size: 10pt;
+    color: grey;
+    padding: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+
+    /* rotate to backside */
+    /* transform: rotateY(180deg); */
+    transform: translateX(-110%);
+    opacity: 0;
+    z-index: -1;
+    backface-visibility: hidden;
+    display: none;
+}
+
+.lmql-chat .side-view .back {
+    transform: translate(0%);
+    opacity: 1;
+    display: flex;
+}
+
+.lmql-chat .code {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+
+    border: 1pt solid rgb(205, 205, 205);
+    box-shadow: 0 0 80pt rgba(0, 0, 0, 0.065);
+    border-radius: 5pt;
+    overflow: hidden;
+}
+
+.lmql-chat .code section h2 {
+    margin: 0;
+    margin: 10pt 0pt;
+    font-size: 12pt;
+}
+
+.lmql-chat .code section {
+    margin: 10pt;
+}
+
+.lmql-chat .code pre, .code #raw-prompt {
+    padding: 10pt;
+    background-color: #2e2e2e;
+    flex: 1;
+    margin-bottom: 0;
+    overflow-y: auto;
+}
+
+.lmql-chat .front {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    /* rotate to backside */
+    transform: rotateY(0deg);
+    backface-visibility: hidden;
+    transition: transform 0.5s ease-in-out;
+
+    border: 1pt solid rgb(205, 205, 205);
+    border-radius: 5pt;
+    overflow: hidden;
+    z-index: 100;
+}
+
+.lmql-chat .content.code-view .front {
+    transform: rotateY(180deg);
+}
+
+.lmql-chat .side {
+    transform-style: preserve-3d;
+    perspective: 1000px;
+    box-shadow: 0 0 20pt rgba(0, 0, 0, 0.16);
+    
+}
+
+.lmql-chat #raw-prompt {
+    /* line break as usual */
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+.lmql-chat a {
+    color: rgb(99, 99, 234);
+    text-decoration: none;
+}
+
+.lmql-chat pre, #raw-prompt {
+    color: white;
+    font-weight: 400;
+    line-height: 1.5;
+    font-size: 10pt;
+}
+
+.lmql-chat .back h3 {
+    text-align: center;
+    margin: 0;
+    margin-top: 10pt;
+}
+
+.lmql-chat .lmql-tag {
+    display: block;
+    text-align: center;
+    color: rgb(222, 220, 220);
+    font-weight: bold;
+}
+
+  </style>
+  <style>
+    #chat-window {
+      height: 400pt;
+      margin: auto;
+      width: 40%;
+      display: block;
+    }
+
+    #chat-flow {
+      display: flex;
+      align-items: center;
+      margin-top: 20pt;
+    }
+
+    .code {
+      font-size: 12pt;
+    }
+
+    .code.cmd:before {
+      content: "";
+    }
+
+    .code.cmd {
+      padding: 4pt;
+      color: rgb(92, 92, 92);
+      background-color: rgb(238, 237, 235);
+      /* do not break */
+      white-space: nowrap;
+      border-color: rgb(221, 221, 221);
+    }
+
+    .chat-input {
+      width: 30%;
+    }
+
+    #chat-flow .line {
+      height: 2pt;
+      background-color: rgb(119, 83, 240);
+      flex: 1;
+    }
+
+    @media only screen and (max-width: 420pt) {
+      #chat-window {
+        width: 100%;
+        margin: 0;
+      }
+
+      #chat-window .chat {
+        padding: 10pt;
+      }
+      #chat-window .promptdown {
+        font-size: 10pt !important;
+      }
+
+      .code {
+        font-size: 10pt !important;
+      }
+    }
+
+    @media (max-width: 800pt) {
+      #chat-window {
+        width: 80%;
+      }
+      #chat-flow {
+        flex-direction: column;
+      }
+
+      #chat-flow .line {
+        width: 2pt;
+        min-height: 20pt;
+        background-color: rgb(119, 83, 240);
+        flex: 1;
+      }
+
+      .chat-input {
+        width: 80%;
+      }
+    }
+
+    h2.big {
+      font-size: 22pt;
+      margin: auto;
+      margin-top: 100pt;
+      margin-bottom: 10pt !important;
+      display: block;
+      text-align: center;
+    }
+
+    img.screenshot  {
+      margin: 0pt;
+      margin-top: 20pt;
+      margin-bottom: 20pt;
+    }
+  </style>
 
   <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "f7d2a6b1a0624c51ae4dab9a4239b77d"}'></script><!-- End Cloudflare Web Analytics -->
 </head>
@@ -72,11 +555,57 @@
     <div class="container is-max-desktop">
       <div class="columns">
         <div class="column column-big">
-          <span class="big" style="font-size: 28pt">💬 LMQL Chat: Scripted Chatbot Development
+          <span class="big" style="font-size: 28pt">
+            💬 LMQL Chat: Scripted Chatbot Development
           </span><br/>
           <span class="big-sub">
-          Deploy custom chatbots with just a few lines of <img src="/static/images/lmql.svg" style="height:15pt;"/> LMQL.
-          </span>
+            Build custom chatbots with a just a couple of lines of <img src="/static/images/lmql.svg" style="height:15pt;"/> LMQL.
+          </span><br/><br/>
+          
+          <div id="chat-flow">
+          <!-- LMQL code -->
+            <div class="code chat-input"><span class="lmql-str">"{:system} You are a helpful chatbot informing users about LMQL Chat, a simple, graphical IDE for developing chatbots with LMQL."</span>
+
+<span class="lmql-kw">while True</span>:
+    q = <span class="lmql-kw">await</span> input()
+    <span class="lmql-str">"{:user} {q}\n"
+    "{:assistant}[ANSWER]"</span> <span class="lmql-kw">where</span> 
+        ➥ stops_at(ANSWER, <span class="lmql-str">"\n"</span>)</div>
+
+           <!-- connector -->
+           <div class="line"></div>
+           
+           <!-- command -->
+           <div class="code cmd">> lmql chat chatbot.lmql</div>
+
+           <!-- connector -->
+           <div class="line"></div>
+          
+           <!-- chat window -->
+           <div class="lmql-chat" id="chat-window">
+            <div class="content side-view">
+              <div class="front side">
+              <div class="toolbar">
+                  <img src="https://lmql.ai/lmql.svg" />
+                  <h1>LMQL Chat</h1>
+                  <h2 id="connection-status">Connected (localhost:3000)</h2>
+              </div>
+              <div class="chat">
+                <pre class="promptdown" animate="true">
+  ![bubble:user| What is LMQL Chat?]
+  [bubble:assistant|LMQL Chat is a web-based chat interface for LMQL. It allows you to spin up a chatbot with just a couple of lines of LMQL, which is available via <t>websockets</t>, <t>REST</t> or <t>Server-Sent Events</t>.]</pre>
+              </div>
+              <div class="input">
+                  <textarea onkeydown="chatKeyDown()" disabled placeholder="Message"></textarea>
+                  <button onclick="clickSend()">
+                      <img src="./send.svg"/>
+                  </button>
+              </div>
+              </div>
+          </div>
+        </div>
+        </div>
+        
           <!-- <div class="is-size-5 publication-authors">
             <span class="author-block">
               <a href="https://www.sri.inf.ethz.ch/people/luca">Luca Beurer-Kellner</a>,</span>
@@ -99,66 +628,55 @@
 <section class="hero teaser">
   <div class="container is-max-desktop">
     <div class="hero-body">
-      <h2 class="subtitle has-text-centered">
-        <!-- <i>LMQL</i> is a programming language for language model interaction. -->
-      </h2>
-      <div class="example-selector">
-        <div class="example-badges">
-          <span class="option active" value="precomputed-joke-json">💬 Simple Chat Flow</span>
-        </div>
-        <div class="select-bar">
-          <!-- <div class="select examples"> -->
-            <!-- <select id="select-example"> -->
-            <!-- </select> -->
-          <!-- </div> -->
-        </div>
-          
-<div id="precomputed-joke-json" class="side-by-side first">
-    <div class="query">
-        <h3>
-            LMQL
-            <a href="playground?snippet=joke" target="_blank">
-            Open In Playground
-            </a>
-        </h3>
-        <pre>
-<span class="lmql-kw">def</span> calc(expr: str): ...
-<span class="lmql-kw">def</span> wiki(q: str): ...
-
-<span class="lmql-str">"Q: What is the population of the US and
- <span style="color: grey">➥</span> Germany combined?\n"</span>
-<span class="lmql-str">"A: Let's think step by step\n"</span>
-
-<span class="lmql-str">"[REASONING]\n"</span> <span class="lmql-kw">where</span> <anchor class="anchor-1"><span class="lmql-kw">in</span>l<span class="lmql-kw">in</span>e_use(<label><div class="multiline"><tt>inline_use</tt> is one of the supported tool use paradigms, where tool execution is automatically handled inline by the language runtime.</div><div class="bridge"></div>
-                </label><div class="dot"></div></anchor>REASONING, [wiki, calc])
-
-<span class="lmql-str">"Therefore the answer is[ANSWER]"</span> <span class="lmql-kw">where</span> INT(ANSWER)
-        </pre>
-    </div>
-    <div class="output" >
-        <h3>Chat</h3>
-    </div>
-</div>
-    </div>
     <div class="container is-max-desktop">
-      <span class="learn-more">
-        <i>Learn more about LMQL by hovering over <anchor>underlined</anchor> parts of the code.</i>
-      </span>
-      <p class="uni-branding">
-        LMQL is a project by the <a href="https://www.sri.inf.ethz.ch/">SRI Lab</a> at <a href="https://ethz.ch/en">ETH Zürich</a>.
-        <img src="static/images/institution-logos.svg"/>
-      </p>
     </div>
     </div>
   </div>
 </section>
 
+<section class="hero teaser" style="font-size:14pt;">
+  <div class="container is-centered">
+    <div class="hero-body has-text-centered" style="margin-top: 30pt;">
+      <h2 class="subtitle has-text-centered big">
+        Full Transparency and Control
+      </h2>
+      <p style="margin: auto;">
+        Build custom chat experiences, with full access to the internal
+        state and execution trace of the underlying LLM calls.
+      </p>
+      <img class="screenshot" src="./studio-screenshot.png"/>
+
+      <div class="columns is-centered" style="padding: 20pt;">
+        <div class="column">
+          <div class="content">
+            <p>
+              <b>Editor</b> The editor interface, allows you to update your chatbot application during execution.
+            </p>
+          </div>
+        </div>
+        <div class="column">
+          <div class="content">
+            <p>
+              <b>Chat Window</b> Interact with your chatbot application during development, to test and debug your application.
+            </p>
+          </div>
+        </div>
+        <div class="column">
+          <div class="content">
+            <p>
+              <b>Internal Trace</b> Track the full internal prompt of your current chat interaction, to understand how your application works, and tune your instructions accordingly.
+            </p>
+          </div>
+        </div>
+    </div>
+  </div>
+</section>
 
 <section class="hero teaser">
   <div class="container is-centered">
     <div class="hero-body has-text-centered" style="margin-top: 30pt;">
       <h2 class="subtitle has-text-centered">
-        Getting Started with LMQL
+        Get Started with LMQL Chat.
       </h2>
       <p style="margin: auto;">
       LMQL is available in a web-based Playground IDE or can be installed via the Python package manager:
@@ -182,288 +700,20 @@
         </div>
 
         <div class="column getting-started">
-          <h2>Run Locally</h2>
+          <h2>Install LMQL 0.7 Beta</h2>
           <div class="cmd">
-              pip install lmql
+              pip install lmql==0.7b2
           </div>
           To run LMQL locally, read the <span><a href="https://docs.lmql.ai/en/latest/quickstart.html">Getting Started</a></span> section of the documentation.
         </div>
       </div>
       <p style="margin: auto; margin-top: -10pt; text-align: center; font-size: 0.9em;">
-        This is an early relase of LMQL and we welcome your feedback and contributions.<br/> Reach out via our <a href="https://discord.gg/7eJP4fcyNT">Community Discord</a>, <a href="https://github.com/eth-sri/lmql/issues">GitHub Issues</a>, or <a href="https://twitter.com/lmqllang">Twitter</a>.
+        We welcome your feedback and contributions. Join the conversation about LMQL via our <a href="https://discord.gg/7eJP4fcyNT">Community Discord</a>, <a href="https://github.com/eth-sri/lmql/issues">GitHub Issues</a>, or <a href="https://twitter.com/lmqllang">Twitter</a>.
       </p>
     </div>
   </div>
 </section>
 
-<section class="section is-dark">
-  <div class="container is-max-desktop">
-    <div class="columns is-centered">
-      <!-- Scripted Prompting -->
-      <div class="column">
-        <!-- <div class="content">
-          <figure class="image">
-            <img src="static/images/scripted-prompting.png" style="margin-top: 35pt"/> 
-          </figure>
-          <h2 class="title is-3">Scripted Prompting</h2>
-          <p>
-            LMQL allows control flow as part of the prompt clause, which can be used to implement scripted and interactive prompting mechanics (e.g. action-based interaction, tool augmentation, etc.).
-          </p>
-          <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video>
-        </div> -->
-        <div class="content" style="text-align: left;">
-          <h2 class="title is-3">Scripted Prompts</h2>
-          <p>
-            LMQL generalizes natural language prompting, making it more expressive while remaining accessible. For this, LMQL builds on top of Python, allowing users to express <b>natural language prompts that also contain code</b>. The resulting queries can be directly executed on language models like OpenAI's GPT models. <b>Fixed answer templates and intermediate instructions</b> allow the user to steer the LLM's reasoning process.
-          </p>
-          <p>
-            <a href="https://docs.lmql.ai/en/latest/language/scripted_prompts.html">
-              Learn more about Scripting <i style="margin-left: 2pt;" class="fa fa-arrow-right"></i>
-            </a>
-          </p>
-          <!-- <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video> -->
-        </div>
-      </div>
-      <!--/ Visual Effects. -->
-
-      <!-- Eager, partial validation -->
-      <div class="column">
-        <div class="content is-vertically-centered">
-          <!-- <figure class="image">
-            <img src="static/images/decoder.png" style="width: 185pt; margin: auto;"/> 
-          </figure> -->
-<div class="code"><span class="lmql-kw">for</span> i <span class="lmql-kw">in</span> <span class="lmql-fct">range</span>(n):
- <span class="lmql-str">"[THOUGHT]"</span>
- <span class="lmql-kw">if</span> THOUGHT.endswith("<<"):
-   <span class="lmql-str">" [EXPR]"</span>
-   <span class="lmql-str">" {calc(EXPR)}>>"</span>
- <span class="lmql-kw">elif</span> THOUGHT.endswith(<span class="lmql-str">"So the answer"</span>):
-   <span class="lmql-kw">break</span>
-<span class="lmql-str">"is[RESULT]"</span>
-</div>
-            </code>
-          </pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-
-<section class="section">
-  <div class="container is-max-desktop">
-    <div class="columns is-centered">
-      <div class="column is-6">
-        <div class="content decoding">
-          <!-- <figure class="image">
-            <img src="static/images/decoder.png" style="width: 185pt; margin: auto;"/> 
-          </figure> -->
-          <object type="image/svg+xml" data="static/images/constrained-decoding.svg" id="decoding-animation"></object>
-          <a onclick="replay(this)" class="replay">
-            <i class="fa fa-repeat"></i> Replay
-          </a>
-        </div>
-      </div>
-      <div class="column">
-        <!-- <div class="content">
-          <figure class="image">
-            <img src="static/images/scripted-prompting.png" style="margin-top: 35pt"/> 
-          </figure>
-          <h2 class="title is-3">Scripted Prompting</h2>
-          <p>
-            LMQL allows control flow as part of the prompt clause, which can be used to implement scripted and interactive prompting mechanics (e.g. action-based interaction, tool augmentation, etc.).
-          </p>
-          <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video>
-        </div> -->
-        <div class="content" style="text-align: left;">
-          <h2 class="title is-3">Output Constraints</h2>
-          <p>
-            In LMQL, users can specify <b>high-level, logical constraints</b> over the language model output. These constraints are then <b>automatically converted into token-level prediction masks</b>, which can be enforced eagearly during text generation. This allows to <b>enforce many constraints strictly</b>, making it impossible for the model to generate content that does not satisfy the requirements. This <b>simplifies multi-part prompting and integration</b>, as it provides better guarantees about the output format.
-          </p>
-          <p>
-          <a href="https://docs.lmql.ai/en/latest/language/constraints.html">
-              Learn more about Constraints <i style="margin-left: 2pt;" class="fa fa-arrow-right"></i>
-          </a>
-          </p>
-          <!-- <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video> -->
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="section">
-  <div class="container is-max-desktop">
-    <div class="columns is-centered">
-
-      <!-- Scripted Prompting -->
-      <div class="column">
-        <!-- <div class="content">
-          <figure class="image">
-            <img src="static/images/scripted-prompting.png" style="margin-top: 35pt"/> 
-          </figure>
-          <h2 class="title is-3">Scripted Prompting</h2>
-          <p>
-            LMQL allows control flow as part of the prompt clause, which can be used to implement scripted and interactive prompting mechanics (e.g. action-based interaction, tool augmentation, etc.).
-          </p>
-          <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video>
-        </div> -->
-        <div class="content">
-          <figure class="image">
-            <img src="static/images/decoder.png" style="height: 10em; width: auto;"/> 
-          </figure>
-          <h2 class="title is-3">Playground and Debugger</h2>
-          <p>
-            LMQL includes a <a href="playground">Playground IDE</a> for query development. This enables users to <b>inspect the interpreter state, validation result and model results at any point during generation</b>, e.g. to inspect the different <a href="playground#translation">hypotheses explored during beam search.</a>
-          </p>
-          <!-- <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video> -->
-        </div>
-      </div>
-      <!--/ Visual Effects. -->
-
-      <!-- Eager, partial validation -->
-      <div class="column">
-        <div class="content">
-          <figure class="image"s>
-            <img src="static/images/eval-semantics.png" style="height: 10em; width: auto;"/> 
-          </figure>
-          <h2 class="title is-3">Efficiency</h2>
-          <p class="is-left-aligned">
-            Using novel, partial evaluation semantics, <b>LMQL evalutes and controls the LM decoding process on a token level</b>, leading to significant efficiency gains over existing approaches. Compared with 🤗&nbsp;Transformers' <tt>generate()</tt>, LMQL can <b>save up to 80% in consumed tokens</b> by optimizing multi-part prompts end-to-end, while maintaining a <b>high-level, declarative syntax</b>.
-          </p>
-          <!-- <video id="dollyzoom" autoplay controls muted loop playsinline height="100%">
-            <source src="https://homes.cs.washington.edu/~kpar/nerfies/videos/dollyzoom-stacked.mp4"
-                    type="video/mp4">
-          </video> -->
-        </div>
-      </div>
-      
-      <!-- Frontend/Backend. -->
-      <div class="column">
-        <div class="content">
-          <figure class="image">
-            <img src="static/images/backend.png" style="height: 10em; width: auto;"/> 
-          </figure>
-          <h2 class="title is-3">Frontend/Backend Separation</h2>
-          <p>
-            LMQL provides a high-level frontend to interact with language models, making <b>query code portable and model-agnostic</b>. This is achieved by abstracting over model-specific implementation details like batching, decoding and tokenization.
-          </p>
-          <p>
-            The actual language <b>model runs out-of-process or even remotely</b>, allowing for easy development and quick prototyping.
-          </p>
-        </div>
-      </div>
-      <!--/ Visual Effects. -->
-    </div>
-  </div>
-</section>
-
-<section class="section is-dark">
-  <div class="container is-max-desktop">
-    <!-- Abstract. -->
-    <div class="columns is-centered has-text-centered">
-      <div class="column" style="font-size: 10pt;">
-        <b class="title is-5 has-text-left" style="font-size: 12pt; text-align: left;display: block; margin: 0; color: rgb(85, 83, 83); margin-bottom: 4pt;">Read The Research Paper</b>
-        <h5 class="title is-4 has-text-left" style="margin-bottom: 2pt;">Prompting Is Programming: A Query Language For Large Language Models
-        </h5>
-        <i style="text-align: left; display: block;">
-          Accepted at <a href="http://pldi23.sigplan.org/">ACM SIGPLAN PLDI'23</a><br/>
-        </i>
-        <div class="content has-text-justified">
-        <div class="authors">
-          <div class="is-size-5 publication-authors">
-            <span class="author-block">
-              <a href="https://www.sri.inf.ethz.ch/people/luca">Luca Beurer-Kellner</a>,</span>
-            <span class="author-block">
-              <a href="https://www.sri.inf.ethz.ch/people/marc">Marc Fischer</a>,</span>
-            <span class="author-block">
-              <a href="https://www.sri.inf.ethz.ch/people/martin">Martin Vechev</a>
-            </span>
-          </div>
-
-          <div class="is-size-5 publication-authors">
-            <span class="author-block"><a href="https://www.sri.inf.ethz.ch"><b>SRI</b>lab</a> @   ETH Zürich, Switzerland</span>
-          </div>
-        </div>
-        <p>
-        <!-- <b style="display: block; text-align: center;">Abstract</b><br/> -->
-        Large language models have demonstrated outstanding performance on a wide range of tasks such as question answering and code generation.
-        On a high level, given an input, a language model can be used to automatically complete the sequence in a statistically-likely way. Based on this, users prompt these models with language instructions or examples, to implement a variety of downstream tasks. Advanced prompting methods can even imply interaction between the language model, a user, and external tools such as calculators. However, to obtain state-of-the-art performance or adapt language models for specific tasks, complex task- and model-specific programs have to be implemented, which may still require ad-hoc interaction.
-        </p>
-        <p>
-        Based on this, we present the novel idea of Language Model Programming (LMP). LMP generalizes language model prompting from pure text prompts to an intuitive combination of text prompting and scripting. Additionally, LMP allows constraints to be specified over the language model output. This enables easy adaption to many tasks, while abstracting language model internals and providing high-level semantics.
-        </p>
-        <p>
-        To enable LMP, we implement LMQL (short for Language Model Query Language), which leverages the constraints and control flow from an LMP prompt to generate an efficient inference procedure that minimizes the number of expensive calls to the underlying language model.
-        </p>
-        <p>
-        We show that LMQL can capture a wide range of state-of-the-art prompting methods in an intuitive way, especially facilitating interactive flows that are challenging to implement with existing high-level APIs. Our evaluation shows that we retain or increase the accuracy on several downstream tasks, while also significantly reducing the required amount of computation or cost in the case of pay-to-use APIs (26-85% cost savings).
-        </p>
-        <span class="link-block">
-          <a href="https://arxiv.org/pdf/2212.06094"
-             class="external-link button is-normal is-rounded is-dark">
-            <span class="icon">
-              <i class="fa-solid fa-file-pdf"></i>
-            </span>
-            <span>Read Full Paper</span>
-          </a>
-        </span>
-        </div>
-      </div>
-      <div class="column is-experimental-results">
-        <br/>
-        <p class="has-text-left">
-          <b>Experimental Results</b><br/>
-          Compared to standard decoding using <a href="https://huggingface.co/docs/transformers/v4.18.0/en/main_classes/text_generation#transformers.generation_utils.GenerationMixin.generate" target="_blank">🤗&nbsp;Transformers' <tt>generate()</tt></a> function, LMQL allows for high-level control and requires less tokens to be processed.
-        </p>
-
-        <figure class="image">
-            <img src="static/images/cot.svg"/>
-            Chain-Of-Thought reasoning with LMQL vs. standard decoding.<br/>
-        </figure>
-
-        <figure class="image" >
-          <img src="static/images/interactive.svg"/>
-          Query statistics of using LMQL for interactive language model querying vs. standard decoding.<br/>
-      </figure>
-      <span class="footnote">
-        *We estimate cost savings based on the current token price of $0.02/1K tokens of the <a href="https://openai.com/api/pricing" target="_blank">GPT-3 <tt>davinci</tt> model</a>.
-      </span>
-    </div>
-    <!--/ Abstract. -->
-  </div>
-</section>
-<section class="section" id="BibTeX">
-  <div class="container is-max-desktop content">
-    <h4 class="title">BibTeX</h4>
-    <pre><code>
-@article{beurer2022prompting,
-  title={Prompting Is Programming: A Query Language For Large Language Models},
-  author={Beurer-Kellner, Luca and Fischer, Marc and Vechev, Martin},
-  journal={{PLDI} '23},
-  year={2022}
-}
-    </code></pre>
-  </div>
-</section>
 
 
 <section class="section custom-footer">
@@ -471,11 +721,11 @@
     <div class="columns">
       <div class="column" style="text-align: left;">
         LMQL is a project by the <a href="https://www.sri.inf.ethz.ch/">Secure, Reliable, and Intelligent Systems Lab</a> at ETH Zürich.<br/>
-        <img src="static/images/institution-logos.svg"/>
+        <img src="/static/images/institution-logos.svg"/>
       </div>
       <div class="column" style="text-align: left;">
         Site template adapted from <a href="http://nerfies.github.io/">Nerfies</a> by Keunhong Park et al. and uses <a href="https://bulma.io/">Bulma</a>.<br/>
-        Last updated on Wed, Jul 19, 3:16 PM (GMT+2)<br/>
+        Last updated on <%LAST_UPDATED%>.<br/>
       </div>
     </div>
   </div>
