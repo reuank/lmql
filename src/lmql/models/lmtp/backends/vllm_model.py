@@ -15,8 +15,7 @@ class VllmModel(LMTPModel):
         self.max_batch_size = 1
 
         print("[Loading vLLM model from", self.model_identifier, " with ", kwargs, "]", flush=True)
-        if not "verbose" in kwargs.keys():
-            kwargs["verbose"] = False
+
         self.llm = LLM(model=model_identifier[len("vllm:"):], **kwargs)
 
     def model_info(self):
@@ -115,9 +114,11 @@ class VllmModel(LMTPModel):
         sampling_params = SamplingParams(
             temperature=temperature,
             max_tokens=max_new_tokens,
-            logprobs=self.voc)
+            logprobs=self.llm.get_tokenizer().vocab_size)
 
-        outputs = self.llm.generate(prompt_token_ids=[input_ids.tolist()], sampling_params=sampling_params)
+        input_ids = input_ids.reshape(-1).tolist()
+
+        outputs = self.llm.generate(prompt_token_ids=input_ids, sampling_params=sampling_params)
 
         #for output in outputs:
         #    prompt = output.prompt
