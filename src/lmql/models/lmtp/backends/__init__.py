@@ -15,3 +15,8 @@ except:
 @LMTPModel.register("llama.cpp", module_dependencies=["llama_cpp"])
 def _llama_cpp_importer():
     import lmql.models.lmtp.backends.llama_cpp_model
+
+# only available when vllm is installed
+@LMTPModel.register("vllm", module_dependencies=["vllm"])
+def _vllm_importer():
+    import lmql.models.lmtp.backends.vllm_model
